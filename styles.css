@@ -201,8 +201,23 @@ textarea { width: 100%; min-height: 100px; }
 .btn-add-prop { white-space: nowrap; padding: 7px 12px; font-size: 12px; }
 
 /* ── Required checkbox ── */
-.prop-req-wrap { display: flex; align-items: center; flex-shrink: 0; }
-.prop-req-check { width: 13px; height: 13px; padding: 0; cursor: pointer; accent-color: #0b57d0; }
+.prop-req-wrap {
+  display: flex; align-items: center; gap: 3px; flex-shrink: 0;
+  cursor: pointer; user-select: none;
+  border: 1px solid #e3e6eb; border-radius: 5px;
+  padding: 1px 5px 1px 3px;
+  background: #f8fafc;
+  transition: background 0.12s, border-color 0.12s;
+}
+.prop-req-wrap:has(.prop-req-check:checked) {
+  background: #eff6ff; border-color: #0b57d0;
+}
+.prop-req-check { width: 12px; height: 12px; padding: 0; cursor: pointer; accent-color: #0b57d0; margin: 0; }
+.prop-req-label {
+  font-size: 11px; font-weight: 600; color: #94a3b8;
+  line-height: 1;
+}
+.prop-req-wrap:has(.prop-req-check:checked) .prop-req-label { color: #0b57d0; }
 
 /* ── anyOf panel ── */
 .prop-anyof-panel {
