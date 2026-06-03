@@ -199,8 +199,9 @@ function renderSchemaItem(name, schema, availableSchemas) {
         }
         return `<div class="prop-row" draggable="true" data-prop-name="${esc(pname)}">
           <span class="drag-handle" title="Drag to reorder">⠿</span>
-          <label class="prop-req-wrap" title="Required">
+          <label class="prop-req-wrap" title="Обязательное поле (required)">
             <input type="checkbox" class="prop-req-check" data-schema="${esc(name)}" data-prop="${esc(pname)}"${isReq ? ' checked' : ''}>
+            <span class="prop-req-label">req</span>
           </label>
           <span class="prop-name">${esc(pname)}</span>
           ${badge}${extra}${exampleHtml}
