@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenAPI 3.1 Constructor MVP</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="partner-banner">
+    <span class="partner-label">партнёр сервиса:</span>
+    <a href="https://www.youtube.com/watch?list=RDdQw4w9WgXcQ&amp;t=43&amp;v=dQw4w9WgXcQ&amp;feature=youtu.be" target="_blank" rel="noopener noreferrer" class="partner-link" title="1XBET">
+      <svg class="xbet-svg" viewBox="0 0 260 72" xmlns="http://www.w3.org/2000/svg" aria-label="1XBET">
+        <!-- "1" -->
+        <text x="0" y="62" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="72" fill="#162060">1</text>
+        <!-- "X" -->
+        <text x="46" y="62" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="72" fill="#162060">X</text>
+        <!-- "BET" -->
+        <text x="108" y="62" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="72" fill="#1a6fd4">BET</text>
+      </svg>
+    </a>
+  </div>
+  <header>
+    <h1>OpenAPI 3.1 Constructor (MVP)</h1>
+  </header>
+  <main class="layout">
+    <section class="panel" id="projectsPanel">
+      <h2>Projects</h2>
+      <div class="row">
+        <input id="newProjectName" placeholder="New project name" />
+        <button id="createProjectBtn">Create</button>
+      </div>
+      <ul id="projectsList"></ul>
+    </section>
+
+    <section class="panel" id="editorPanel">
+      <h2>Editor</h2>
+      <div id="emptyState">Select a project</div>
+      <div id="editor" class="hidden">
+        <div class="group">
+          <label>Title <input id="apiTitle" /></label>
+          <label>Version <input id="apiVersion" /></label>
+        </div>
+        <label class="op-label" style="margin-bottom:10px">Description
+          <textarea id="apiDesc" placeholder="API description (markdown supported)" style="min-height:58px"></textarea>
+        </label>
+
+        <h3>Tags</h3>
+        <div class="row">
+          <input id="tagName" placeholder="Tag name (e.g. Users)" />
+          <button id="addTagBtn">Add tag</button>
+        </div>
+        <ul id="tagsList"></ul>
+
+        <div class="section-hdr">
+          <h3>Components / Schemas</h3>
+          <button id="collapseAllSchemasBtn" class="btn-collapse-all">Collapse all</button>
+        </div>
+        <div class="row">
+          <input id="schemaName" placeholder="Schema name" />
+          <button id="addSchemaBtn">Add schema</button>
+        </div>
+        <ul id="schemasList"></ul>
+
+        <div class="section-hdr">
+          <h3>Paths</h3>
+          <button id="collapseAllOpsBtn" class="btn-collapse-all">Collapse all</button>
+        </div>
+        <div class="row">
+          <input id="pathValue" placeholder="/users/{userId}" />
+          <select id="pathMethod">
+            <option>get</option><option>post</option><option>put</option><option>delete</option><option>patch</option>
+          </select>
+          <button id="addPathBtn">Add operation</button>
+        </div>
+        <ul id="pathsList"></ul>
+      </div>
+    </section>
+
+    <section class="panel" id="previewPanel">
+      <h2>OpenAPI JSON</h2>
+      <div class="row">
+        <button id="exportBtn">Export JSON</button>
+        <button id="copyBtn">Copy JSON</button>
+        <label class="fileInput">Import JSON <input id="importInput" type="file" accept="application/json" /></label>
+      </div>
+      <pre id="jsonPreview"></pre>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
