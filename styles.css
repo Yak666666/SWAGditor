@@ -251,6 +251,8 @@ textarea { width: 100%; min-height: 100px; }
 .drag-handle:hover { color: #94a3b8; }
 .prop-row.dragging  { opacity: 0.35; }
 .prop-row.drag-over { border-color: #0b57d0; background: #eff6ff; }
+.param-row.dragging  { opacity: 0.35; }
+.param-row.drag-over { border-color: #0b57d0; background: #eff6ff; }
 
 /* ── Parameters ── */
 .params-section { margin-bottom: 10px; }

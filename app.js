@@ -3,6 +3,7 @@ const STORAGE_KEY = 'oas_mvp_projects_v1';
 const RESPONSE_CODES = [
   { code: '200', label: '200 OK',            defaultDesc: 'Success' },
   { code: '201', label: '201 Created',       defaultDesc: 'Created' },
+  { code: '204', label: '204 No Content',    defaultDesc: 'No Content' },
   { code: '400', label: '400 Bad Request',   defaultDesc: 'Bad Request' },
   { code: '403', label: '403 Forbidden',     defaultDesc: 'Forbidden' },
   { code: '404', label: '404 Not Found',     defaultDesc: 'Not Found' },
@@ -339,12 +340,18 @@ function renderOperationItem(path, method, op, availableTags, availableSchemas) 
   const params = op.parameters || [];
   const paramsListHtml = params.length
     ? params.map((param, idx) => {
-        const typeName = schemaToType(param.schema || { type: 'string' });
-        return `<div class="param-row">
-          <span class="param-name-mono">${esc(param.name)}</span>
+        const pSchema = param.schema || { type: 'string' };
+        const isParamArray = pSchema.type === 'array';
+        const innerType = schemaToType(isParamArray ? (pSchema.items || { type: 'string' }) : pSchema);
+        const displayName = isParamArray ? `${param.name}[]` : param.name;
+        const typeBadgeText = isParamArray ? `array&lt;${innerType}&gt;` : innerType;
+        const typeBadgeClass = isParamArray ? 'type-array' : `type-${innerType}`;
+        return `<div class="param-row" draggable="true" data-param-idx="${idx}" data-path="${esc(path)}" data-method="${esc(method)}">
+          <span class="drag-handle" title="Drag to reorder">⠿</span>
+          <span class="param-name-mono">${esc(displayName)}</span>
           <span class="param-in-badge param-in-${param.in}">${param.in}</span>
           ${param.required ? '<span class="param-required-star" title="required">✱</span>' : ''}
-          <span class="prop-type-tag type-${typeName}">${typeName}</span>
+          <span class="prop-type-tag ${typeBadgeClass}">${typeBadgeText}</span>
           <span class="param-desc-text">${esc(param.description || '')}</span>
           <button class="btn-icon" data-del-param="${idx}" data-path="${esc(path)}" data-method="${esc(method)}">×</button>
         </div>`;
@@ -360,6 +367,7 @@ function renderOperationItem(path, method, op, availableTags, availableSchemas) 
       <option value="cookie">cookie</option>
     </select>
     <label class="param-req-label"><input type="checkbox" class="param-req-check" checked />req</label>
+    <label class="param-req-label"><input type="checkbox" class="param-arr-check" />[ ]</label>
     <select class="param-type-select">${paramTypeOpts}</select>
     <input class="param-desc-input" placeholder="description" />
     <button class="btn-add-param" data-path="${esc(path)}" data-method="${esc(method)}">+ Add</button>
@@ -369,7 +377,7 @@ function renderOperationItem(path, method, op, availableTags, availableSchemas) 
     const isEnabled = enabledCodes.includes(rc.code);
     const desc = op.responses?.[rc.code]?.description ?? rc.defaultDesc;
     const family = rc.code[0];
-    const codeSchemaHtml = isEnabled ? (() => {
+    const codeSchemaHtml = isEnabled && rc.code !== '204' ? (() => {
       const { rtype, rvalue, isArray } = getCodeSchemaInfo(op, rc.code);
       return `<div class="resp-schema-inline">${schemaRow(path, method, `rc${rc.code}-`, rtype, rvalue, isArray, availableSchemas, true)}</div>`;
     })() : '';
@@ -616,8 +624,7 @@ els.schemasList.onclick = (e) => {
     ].join(',');
     const isArr     = type === '$ref' && row.querySelector('.prop-arr-select')?.value === 'array';
     schema.properties ||= {};
-    // Prepend new property
-    schema.properties = { [propName]: buildPropSchema(type, refName, enumVals, example, isArr, anyOfVals), ...schema.properties };
+    schema.properties[propName] = buildPropSchema(type, refName, enumVals, example, isArr, anyOfVals);
     row.querySelector('.prop-name-input').value = '';
     persist(); renderEditor(); return;
   }
@@ -707,6 +714,57 @@ els.schemasList.addEventListener('drop', e => {
   entries.splice(toIdx, 0, moved);
   schema.properties = Object.fromEntries(entries);
   _dragProp = null;
+  persist(); renderEditor();
+});
+
+// ── Parameter drag-and-drop ──
+
+let _dragParam = null;
+
+els.pathsList.addEventListener('dragstart', e => {
+  const row = e.target.closest('.param-row');
+  if (!row) return;
+  _dragParam = {
+    path:   row.dataset.path,
+    method: row.dataset.method,
+    idx:    parseInt(row.dataset.paramIdx),
+  };
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => row.classList.add('dragging'), 0);
+});
+
+els.pathsList.addEventListener('dragend', () => {
+  document.querySelectorAll('.param-row.dragging, .param-row.drag-over')
+    .forEach(el => el.classList.remove('dragging', 'drag-over'));
+  _dragParam = null;
+});
+
+els.pathsList.addEventListener('dragover', e => {
+  const row = e.target.closest('.param-row');
+  if (!row || !_dragParam) return;
+  e.preventDefault();
+  document.querySelectorAll('.param-row.drag-over').forEach(el => el.classList.remove('drag-over'));
+  if (parseInt(row.dataset.paramIdx) !== _dragParam.idx) row.classList.add('drag-over');
+});
+
+els.pathsList.addEventListener('dragleave', e => {
+  e.target.closest('.param-row')?.classList.remove('drag-over');
+});
+
+els.pathsList.addEventListener('drop', e => {
+  e.preventDefault();
+  const row = e.target.closest('.param-row');
+  if (!row || !_dragParam) return;
+  row.classList.remove('drag-over');
+  const toIdx = parseInt(row.dataset.paramIdx);
+  const { path, method, idx: fromIdx } = _dragParam;
+  if (toIdx === fromIdx || row.dataset.path !== path || row.dataset.method !== method) return;
+  const p = currentProject(); if (!p) return;
+  const op = p.doc.paths[path]?.[method];
+  if (!op?.parameters) return;
+  const [moved] = op.parameters.splice(fromIdx, 1);
+  op.parameters.splice(toIdx, 0, moved);
+  _dragParam = null;
   persist(); renderEditor();
 });
 
@@ -821,8 +879,10 @@ els.pathsList.onclick = (e) => {
     const inVal    = row.querySelector('.param-in-select')?.value || 'query';
     const required = inVal === 'path' ? true : !!(row.querySelector('.param-req-check')?.checked);
     const typeVal  = row.querySelector('.param-type-select')?.value || 'string';
+    const isArr    = !!(row.querySelector('.param-arr-check')?.checked);
     const desc     = row.querySelector('.param-desc-input')?.value.trim();
-    const param    = { name, in: inVal, required, schema: typeToSchema(typeVal) };
+    const schema   = isArr ? { type: 'array', items: typeToSchema(typeVal) } : typeToSchema(typeVal);
+    const param    = { name, in: inVal, required, schema };
     if (desc) param.description = desc;
     op.parameters ||= [];
     op.parameters.unshift(param);
