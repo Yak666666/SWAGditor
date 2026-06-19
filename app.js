@@ -138,6 +138,17 @@ const els = {
 const _collapsedSchemas = new Set();
 const _collapsedOps     = new Set();
 
+function collapseAllForProject(p) {
+  _collapsedSchemas.clear();
+  _collapsedOps.clear();
+  if (!p) return;
+  for (const name of Object.keys(p.doc.components?.schemas || {}))
+    _collapsedSchemas.add(name);
+  for (const [path, item] of Object.entries(p.doc.paths || {}))
+    for (const method of Object.keys(item))
+      _collapsedOps.add(`${path}::${method}`);
+}
+
 // ── Render helpers ──
 
 function trashIcon() {
@@ -149,6 +160,52 @@ function trashIcon() {
     <line x1="10" y1="11" x2="10" y2="17.5"/>
     <line x1="12.5" y1="11" x2="13" y2="17.5"/>
   </svg>`;
+}
+
+function updateRefs(obj, oldRef, newRef) {
+  if (!obj || typeof obj !== 'object') return;
+  for (const key of Object.keys(obj)) {
+    if (key === '$ref' && obj[key] === oldRef) {
+      obj[key] = newRef;
+    } else {
+      updateRefs(obj[key], oldRef, newRef);
+    }
+  }
+}
+
+function applySchemaRename(input) {
+  const origName = input.dataset.origName;
+  const newName  = input.value.trim();
+  if (!newName || newName === origName) return;
+  const p = currentProject(); if (!p) return;
+  const schemas = p.doc.components?.schemas;
+  if (!schemas || !schemas[origName]) return;
+  if (schemas[newName]) { input.value = origName; return; }
+  const entries = Object.entries(schemas);
+  const idx = entries.findIndex(([k]) => k === origName);
+  entries[idx][0] = newName;
+  p.doc.components.schemas = Object.fromEntries(entries);
+  updateRefs(p.doc, `#/components/schemas/${origName}`, `#/components/schemas/${newName}`);
+  persist(); renderEditor();
+}
+
+function applyPathRename(input) {
+  const origPath = input.dataset.origPath;
+  const newPath  = input.value.trim();
+  if (!newPath || newPath === origPath) return;
+  const p = currentProject(); if (!p) return;
+  if (!p.doc.paths[origPath]) return;
+  const entries = Object.entries(p.doc.paths);
+  const idx = entries.findIndex(([k]) => k === origPath);
+  entries[idx][0] = newPath;
+  p.doc.paths = Object.fromEntries(entries);
+  for (const key of [..._collapsedOps]) {
+    if (key.startsWith(`${origPath}::`)) {
+      _collapsedOps.delete(key);
+      _collapsedOps.add(`${newPath}::${key.slice(origPath.length + 2)}`);
+    }
+  }
+  persist(); renderEditor();
 }
 
 function esc(str) {
@@ -228,7 +285,7 @@ function renderSchemaItem(name, schema, availableSchemas) {
   return `<li class="schema-item" data-schema-name="${esc(name)}">
     <div class="schema-header">
       <button class="collapse-btn" title="Collapse / expand">▼</button>
-      <strong>${esc(name)}</strong>
+      <input class="schema-name-input" value="${esc(name)}" data-orig-name="${esc(name)}" title="Нажмите для переименования" />
       <button class="btn-danger btn-sm" data-del-schema="${esc(name)}">${trashIcon()}</button>
     </div>
     <div class="schema-body">
@@ -346,13 +403,18 @@ function renderOperationItem(path, method, op, availableTags, availableSchemas) 
         const displayName = isParamArray ? `${param.name}[]` : param.name;
         const typeBadgeText = isParamArray ? `array&lt;${innerType}&gt;` : innerType;
         const typeBadgeClass = isParamArray ? 'type-array' : `type-${innerType}`;
+        const paramInOpts = ['path','query','header','cookie'].map(v =>
+          `<option value="${v}"${param.in===v?' selected':''}>${v}</option>`).join('');
+        const paramTypeOpts2 = PARAM_TYPES.map(t =>
+          `<option value="${t}"${innerType===t?' selected':''}>${t}</option>`).join('');
         return `<div class="param-row" draggable="true" data-param-idx="${idx}" data-path="${esc(path)}" data-method="${esc(method)}">
           <span class="drag-handle" title="Drag to reorder">⠿</span>
-          <span class="param-name-mono">${esc(displayName)}</span>
-          <span class="param-in-badge param-in-${param.in}">${param.in}</span>
-          ${param.required ? '<span class="param-required-star" title="required">✱</span>' : ''}
-          <span class="prop-type-tag ${typeBadgeClass}">${typeBadgeText}</span>
-          <span class="param-desc-text">${esc(param.description || '')}</span>
+          <input class="param-edit-name" value="${esc(param.name)}" placeholder="name" data-param-idx="${idx}" data-path="${esc(path)}" data-method="${esc(method)}" />
+          <select class="param-edit-in param-in-badge param-in-${param.in}" data-param-idx="${idx}" data-path="${esc(path)}" data-method="${esc(method)}">${paramInOpts}</select>
+          <label class="param-req-label" title="Required"><input type="checkbox" class="param-edit-req" data-param-idx="${idx}" data-path="${esc(path)}" data-method="${esc(method)}"${param.required?' checked':''} />req</label>
+          <select class="param-edit-type" data-param-idx="${idx}" data-path="${esc(path)}" data-method="${esc(method)}">${paramTypeOpts2}</select>
+          <label class="param-req-label" title="Array"><input type="checkbox" class="param-edit-arr" data-param-idx="${idx}" data-path="${esc(path)}" data-method="${esc(method)}"${isParamArray?' checked':''} />[ ]</label>
+          <input class="param-edit-desc" value="${esc(param.description||'')}" placeholder="description…" data-param-idx="${idx}" data-path="${esc(path)}" data-method="${esc(method)}" />
           <button class="btn-icon" data-del-param="${idx}" data-path="${esc(path)}" data-method="${esc(method)}">×</button>
         </div>`;
       }).join('')
@@ -412,11 +474,14 @@ function renderOperationItem(path, method, op, availableTags, availableSchemas) 
     ? schemaRow(path, method, 'rb-', rb.rtype, rb.rvalue, rb.isArray, availableSchemas)
     : '';
 
-  return `<li class="op-item" data-op-key="${esc(path)}::${esc(method)}">
+  return `<li class="op-item" data-op-key="${esc(path)}::${esc(method)}" draggable="true">
     <div class="op-header">
+      <span class="drag-handle op-drag-handle" title="Перетащить для сортировки">⠿</span>
       <button class="collapse-btn" title="Collapse / expand">▼</button>
-      <span class="method-badge method-${method}">${method.toUpperCase()}</span>
-      <span class="op-path">${esc(path)}</span>
+      <select class="method-select method-${method}" data-path="${esc(path)}" data-current-method="${esc(method)}">
+        ${['get','post','put','delete','patch'].map(m => `<option value="${m}"${m===method?' selected':''}>${m.toUpperCase()}</option>`).join('')}
+      </select>
+      <input class="op-path-input" value="${esc(path)}" data-orig-path="${esc(path)}" data-method="${esc(method)}" title="Нажмите для переименования пути" />
       <button class="btn-danger btn-sm" data-del-op="1" data-path="${esc(path)}" data-method="${esc(method)}">${trashIcon()}</button>
     </div>
     <div class="op-body">
@@ -454,8 +519,9 @@ function renderOperationItem(path, method, op, availableTags, availableSchemas) 
 }
 
 function renderPreview() {
+  if (_editingPreview) return;
   const p = currentProject();
-  els.jsonPreview.textContent = p ? JSON.stringify(p.doc, null, 2) : '';
+  els.jsonPreview.value = p ? JSON.stringify(p.doc, null, 2) : '';
 }
 
 function renderEditor() {
@@ -463,7 +529,7 @@ function renderEditor() {
   if (!p) {
     els.editor.classList.add('hidden');
     els.emptyState.classList.remove('hidden');
-    els.jsonPreview.textContent = '';
+    els.jsonPreview.value = '';
     return;
   }
 
@@ -509,6 +575,7 @@ function renderProjects() {
   els.projectsList.innerHTML = '';
   for (const p of projects) {
     const li = document.createElement('li');
+    if (p.id === selectedProjectId) li.classList.add('project-active');
     li.innerHTML = `<strong>${esc(p.name)}</strong><div class="row">
       <button data-id="${p.id}" data-act="select">Open</button>
       <button data-id="${p.id}" data-act="delete">Delete</button>
@@ -535,10 +602,16 @@ els.projectsList.onclick = (e) => {
   const btn = e.target.closest('button');
   if (!btn) return;
   const { id, act } = btn.dataset;
-  if (act === 'select') selectedProjectId = id;
+  if (act === 'select') {
+    selectedProjectId = id;
+    collapseAllForProject(currentProject());
+  }
   if (act === 'delete') {
     projects = projects.filter(p => p.id !== id);
-    if (selectedProjectId === id) selectedProjectId = projects[0]?.id ?? null;
+    if (selectedProjectId === id) {
+      selectedProjectId = projects[0]?.id ?? null;
+      collapseAllForProject(currentProject());
+    }
   }
   persist();
   renderProjects();
@@ -747,10 +820,6 @@ els.pathsList.addEventListener('dragover', e => {
   if (parseInt(row.dataset.paramIdx) !== _dragParam.idx) row.classList.add('drag-over');
 });
 
-els.pathsList.addEventListener('dragleave', e => {
-  e.target.closest('.param-row')?.classList.remove('drag-over');
-});
-
 els.pathsList.addEventListener('drop', e => {
   e.preventDefault();
   const row = e.target.closest('.param-row');
@@ -765,6 +834,77 @@ els.pathsList.addEventListener('drop', e => {
   const [moved] = op.parameters.splice(fromIdx, 1);
   op.parameters.splice(toIdx, 0, moved);
   _dragParam = null;
+  persist(); renderEditor();
+});
+
+// ── Operation drag-and-drop ──
+
+let _dragOp = null;
+
+els.pathsList.addEventListener('dragstart', e => {
+  if (e.target.closest('.param-row')) return;
+  if (!e.target.closest('.op-drag-handle')) return;
+  const item = e.target.closest('.op-item');
+  if (!item) return;
+  _dragOp = item.dataset.opKey;
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => item.classList.add('op-dragging'), 0);
+});
+
+els.pathsList.addEventListener('dragend', () => {
+  document.querySelectorAll('.op-item.op-dragging, .op-item.op-drag-over')
+    .forEach(el => el.classList.remove('op-dragging', 'op-drag-over'));
+  _dragOp = null;
+});
+
+els.pathsList.addEventListener('dragover', e => {
+  if (!_dragOp) return;
+  const item = e.target.closest('.op-item');
+  if (!item) return;
+  e.preventDefault();
+  document.querySelectorAll('.op-item.op-drag-over').forEach(el => el.classList.remove('op-drag-over'));
+  if (item.dataset.opKey !== _dragOp) item.classList.add('op-drag-over');
+});
+
+els.pathsList.addEventListener('dragleave', e => {
+  if (!_dragOp) {
+    e.target.closest('.param-row')?.classList.remove('drag-over');
+    return;
+  }
+  const item = e.target.closest('.op-item');
+  if (item && !item.contains(e.relatedTarget)) item.classList.remove('op-drag-over');
+});
+
+els.pathsList.addEventListener('drop', e => {
+  if (!_dragOp) return;
+  const item = e.target.closest('.op-item');
+  if (!item || item.dataset.opKey === _dragOp) return;
+  e.preventDefault();
+  item.classList.remove('op-drag-over');
+
+  const fromKey = _dragOp;
+  const toKey   = item.dataset.opKey;
+  _dragOp = null;
+
+  const p = currentProject(); if (!p) return;
+
+  // Build flat list, reorder, reconstruct paths
+  const flat = Object.entries(p.doc.paths || {}).flatMap(([path, pathItem]) =>
+    Object.entries(pathItem).map(([method, op]) => ({ path, method, op }))
+  );
+  const fromIdx = flat.findIndex(x => `${x.path}::${x.method}` === fromKey);
+  const toIdx   = flat.findIndex(x => `${x.path}::${x.method}` === toKey);
+  if (fromIdx < 0 || toIdx < 0) return;
+  const [moved] = flat.splice(fromIdx, 1);
+  flat.splice(toIdx, 0, moved);
+
+  const newPaths = {};
+  for (const { path, method, op } of flat) {
+    newPaths[path] ||= {};
+    newPaths[path][method] = op;
+  }
+  p.doc.paths = newPaths;
+
   persist(); renderEditor();
 });
 
@@ -786,6 +926,30 @@ function makeCollapseAll(list, selector, collapseSet, dataKey) {
 
 els.collapseAllSchemasBtn.onclick = makeCollapseAll(els.schemasList, '.schema-item', _collapsedSchemas, 'schemaName');
 els.collapseAllOpsBtn.onclick     = makeCollapseAll(els.pathsList,   '.op-item',     _collapsedOps,     'opKey');
+
+// ── Inline rename: schema name ──
+
+els.schemasList.addEventListener('focusout', e => {
+  if (!e.target.classList.contains('schema-name-input')) return;
+  applySchemaRename(e.target);
+});
+els.schemasList.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || !e.target.classList.contains('schema-name-input')) return;
+  e.preventDefault();
+  e.target.blur();
+});
+
+// ── Inline rename: operation path ──
+
+els.pathsList.addEventListener('focusout', e => {
+  if (!e.target.classList.contains('op-path-input')) return;
+  applyPathRename(e.target);
+});
+els.pathsList.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || !e.target.classList.contains('op-path-input')) return;
+  e.preventDefault();
+  e.target.blur();
+});
 
 // ── Tag events ──
 
@@ -895,6 +1059,64 @@ els.pathsList.onclick = (e) => {
 els.pathsList.onchange = (e) => {
   const target = e.target;
   const p = currentProject(); if (!p) return;
+
+  // ── method type change ──
+  if (target.classList.contains('method-select')) {
+    const oldMethod = target.dataset.currentMethod;
+    const newMethod = target.value;
+    const ptath = target.dataset.path;
+    if (!ptath || !oldMethod || newMethod === oldMethod) return;
+    if (!p.doc.paths[ptath]?.[oldMethod]) return;
+    p.doc.paths[ptath][newMethod] = p.doc.paths[ptath][oldMethod];
+    delete p.doc.paths[ptath][oldMethod];
+    const oldKey = `${ptath}::${oldMethod}`, newKey = `${ptath}::${newMethod}`;
+    if (_collapsedOps.has(oldKey)) { _collapsedOps.delete(oldKey); _collapsedOps.add(newKey); }
+    persist(); renderEditor(); return;
+  }
+
+  // ── param inline edits ──
+  if (target.classList.contains('param-edit-in')) {
+    const { path, method } = target.dataset;
+    const idx = parseInt(target.dataset.paramIdx);
+    const op = p.doc.paths[path]?.[method]; if (!op?.parameters?.[idx]) return;
+    op.parameters[idx].in = target.value;
+    if (target.value === 'path') op.parameters[idx].required = true;
+    ['path','query','header','cookie'].forEach(v => target.classList.remove(`param-in-${v}`));
+    target.classList.add(`param-in-${target.value}`);
+    if (target.value === 'path') {
+      target.closest('.param-row')?.querySelector('.param-edit-req')?.setAttribute('checked','');
+      target.closest('.param-row')?.querySelector('.param-edit-req') && (target.closest('.param-row').querySelector('.param-edit-req').checked = true);
+    }
+    persist(); renderPreview(); return;
+  }
+  if (target.classList.contains('param-edit-type')) {
+    const { path, method } = target.dataset;
+    const idx = parseInt(target.dataset.paramIdx);
+    const op = p.doc.paths[path]?.[method]; if (!op?.parameters?.[idx]) return;
+    const isArr = op.parameters[idx].schema?.type === 'array';
+    op.parameters[idx].schema = isArr
+      ? { type: 'array', items: typeToSchema(target.value) }
+      : typeToSchema(target.value);
+    persist(); renderPreview(); return;
+  }
+  if (target.classList.contains('param-edit-arr')) {
+    const { path, method } = target.dataset;
+    const idx = parseInt(target.dataset.paramIdx);
+    const op = p.doc.paths[path]?.[method]; if (!op?.parameters?.[idx]) return;
+    const cur = op.parameters[idx].schema || { type: 'string' };
+    op.parameters[idx].schema = target.checked
+      ? { type: 'array', items: cur.type === 'array' ? (cur.items || { type: 'string' }) : cur }
+      : (cur.type === 'array' ? (cur.items || { type: 'string' }) : cur);
+    persist(); renderPreview(); return;
+  }
+  if (target.classList.contains('param-edit-req')) {
+    const { path, method } = target.dataset;
+    const idx = parseInt(target.dataset.paramIdx);
+    const op = p.doc.paths[path]?.[method]; if (!op?.parameters?.[idx]) return;
+    op.parameters[idx].required = target.checked;
+    persist(); renderPreview(); return;
+  }
+
   const { path, method } = target.dataset;
   if (!path || !method) return;
   const op = p.doc.paths[path]?.[method];
@@ -1003,6 +1225,24 @@ els.pathsList.onchange = (e) => {
 els.pathsList.oninput = (e) => {
   const target = e.target;
   const p = currentProject(); if (!p) return;
+
+  // ── param name / desc live edit ──
+  if (target.classList.contains('param-edit-name')) {
+    const { path, method } = target.dataset;
+    const idx = parseInt(target.dataset.paramIdx);
+    const op = p.doc.paths[path]?.[method]; if (!op?.parameters?.[idx]) return;
+    op.parameters[idx].name = target.value;
+    persist(); renderPreview(); return;
+  }
+  if (target.classList.contains('param-edit-desc')) {
+    const { path, method } = target.dataset;
+    const idx = parseInt(target.dataset.paramIdx);
+    const op = p.doc.paths[path]?.[method]; if (!op?.parameters?.[idx]) return;
+    if (target.value) op.parameters[idx].description = target.value;
+    else delete op.parameters[idx].description;
+    persist(); renderPreview(); return;
+  }
+
   const { path, method } = target.dataset;
   if (!path || !method) return;
   const op = p.doc.paths[path]?.[method];
@@ -1073,6 +1313,32 @@ function applyCodeSchema(op, code, baseSchema, isArray) {
 
 // ── Export / Import ──
 
+// ── JSON preview — paste / edit ──
+
+let _previewInputTimer = null;
+let _editingPreview    = false;
+let _pendingJson       = null;
+
+els.jsonPreview.addEventListener('focus', () => { _editingPreview = true; });
+els.jsonPreview.addEventListener('blur',  () => { _editingPreview = false; });
+
+els.jsonPreview.addEventListener('input', () => {
+  _pendingJson = els.jsonPreview.value; // capture immediately before any re-render can overwrite
+  clearTimeout(_previewInputTimer);
+  _previewInputTimer = setTimeout(() => {
+    const content = _pendingJson;
+    _pendingJson = null;
+    if (!content) return;
+    const p = currentProject(); if (!p) return;
+    try {
+      p.doc = JSON.parse(content);
+      collapseAllForProject(p);
+      persist();
+      renderEditor();
+    } catch { /* невалидный JSON — ждём */ }
+  }, 600);
+});
+
 els.exportBtn.onclick = () => {
   const p = currentProject(); if (!p) return;
   const blob = new Blob([JSON.stringify(p.doc, null, 2)], { type: 'application/json' });
@@ -1097,6 +1363,7 @@ els.importInput.onchange = async () => {
   if (doc.openapi !== '3.1.0') alert('Expected OpenAPI 3.1.0');
   const p = currentProject(); if (!p) return;
   p.doc = doc;
+  collapseAllForProject(p);
   persist(); renderEditor();
 };
 

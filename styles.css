@@ -34,10 +34,30 @@ button { padding: 8px 14px; background: #0b57d0; color: white; border: none; bor
 button:hover { opacity: 0.88; }
 ul { list-style: none; padding: 0; margin: 0; }
 li { border: 1px solid #e3e6eb; border-radius: 8px; padding: 8px; margin-bottom: 8px; background: #fff; }
+.project-active { border-color: #0b57d0 !important; background: #eff6ff !important; border-left: 3px solid #0b57d0 !important; }
+.project-active strong { color: #0b57d0; }
 .hidden { display: none; }
 .group { display: flex; gap: 12px; margin-bottom: 12px; }
 .group label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
 pre { white-space: pre-wrap; overflow: auto; background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; min-height: 72vh; font-size: 12px; }
+#jsonPreview {
+  display: block;
+  width: 100%;
+  min-height: 72vh;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 12px;
+  border-radius: 8px;
+  border: none;
+  outline: none;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 12px;
+  white-space: pre;
+  overflow: auto;
+  resize: vertical;
+  line-height: 1.5;
+}
+#jsonPreview:focus { border: 1px solid #3b82f6; }
 textarea { width: 100%; min-height: 100px; }
 .fileInput input { display: none; }
 .fileInput { background: #1a73e8; color: white; border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 13px; }
@@ -253,6 +273,8 @@ textarea { width: 100%; min-height: 100px; }
 .prop-row.drag-over { border-color: #0b57d0; background: #eff6ff; }
 .param-row.dragging  { opacity: 0.35; }
 .param-row.drag-over { border-color: #0b57d0; background: #eff6ff; }
+.op-item.op-dragging  { opacity: 0.35; }
+.op-item.op-drag-over { border-color: #0b57d0; background: #eff6ff; box-shadow: 0 0 0 2px #bfdbfe; }
 
 /* ── Parameters ── */
 .params-section { margin-bottom: 10px; }
@@ -266,6 +288,28 @@ textarea { width: 100%; min-height: 100px; }
 .param-in-cookie { background: #f1f5f9; color: #475569; }
 .param-required-star { color: #dc2626; font-size: 13px; flex-shrink: 0; }
 .param-desc-text { font-size: 12px; color: #64748b; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.param-edit-name {
+  font-family: monospace; font-size: 13px; font-weight: 600; color: #111;
+  background: transparent; border: none; border-bottom: 1px dashed transparent;
+  padding: 0 2px; min-width: 60px; flex: 1; outline: none; cursor: text;
+}
+.param-edit-name:hover { border-bottom-color: #94a3b8; }
+.param-edit-name:focus { border-bottom-color: #0b57d0; background: #f0f7ff; border-radius: 3px; border-bottom-style: solid; }
+.param-edit-in {
+  appearance: none; -webkit-appearance: none;
+  border: none; outline: none; cursor: pointer; font-family: inherit; font-size: 10px;
+}
+.param-edit-type {
+  font-size: 11px; padding: 2px 5px; border: 1px solid #e2e8f0; border-radius: 8px;
+  background: #f8fafc; color: #374151; min-width: 72px; font-family: inherit; cursor: pointer; outline: none;
+}
+.param-edit-desc {
+  font-size: 12px; color: #64748b; background: transparent;
+  border: none; border-bottom: 1px dashed transparent;
+  padding: 0 2px; flex: 2; min-width: 70px; outline: none; cursor: text;
+}
+.param-edit-desc:hover { border-bottom-color: #94a3b8; }
+.param-edit-desc:focus { border-bottom-color: #0b57d0; background: #f0f7ff; border-radius: 3px; border-bottom-style: solid; }
 .add-param-row { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
 .add-param-row .param-name-input { flex: 1; min-width: 80px; }
 .add-param-row .param-in-select  { min-width: 78px; }
@@ -294,6 +338,20 @@ textarea { width: 100%; min-height: 100px; }
   margin-bottom: 10px;
 }
 .op-path { font-family: monospace; font-size: 13px; flex: 1; color: #111; }
+.op-path-input {
+  font-family: monospace; font-size: 13px; color: #111;
+  background: transparent; border: none; border-bottom: 1px dashed transparent;
+  padding: 0 2px; flex: 1; min-width: 0; outline: none; cursor: text;
+}
+.op-path-input:hover { border-bottom-color: #94a3b8; }
+.op-path-input:focus { border-bottom-color: #0b57d0; background: #f0f7ff; border-radius: 3px; border-bottom-style: solid; }
+.schema-name-input {
+  font-size: 14px; font-family: monospace; color: #1e3a8a; font-weight: 700;
+  background: transparent; border: none; border-bottom: 1px dashed transparent;
+  padding: 0 2px; flex: 1; min-width: 0; outline: none; cursor: text;
+}
+.schema-name-input:hover { border-bottom-color: #94a3b8; }
+.schema-name-input:focus { border-bottom-color: #0b57d0; background: #eff6ff; border-radius: 3px; border-bottom-style: solid; }
 .op-label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; margin-bottom: 8px; color: #374151; }
 .op-label > input { width: 100%; }
 .schema-source-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
@@ -315,11 +373,29 @@ textarea { width: 100%; min-height: 100px; }
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
-.method-get    { background: #dbeafe; color: #1d4ed8; }
-.method-post   { background: #dcfce7; color: #166534; }
-.method-put    { background: #fef9c3; color: #854d0e; }
-.method-delete { background: #fee2e2; color: #991b1b; }
-.method-patch  { background: #f3e8ff; color: #7e22ce; }
+.method-select {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  font-family: inherit;
+  min-width: 68px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.method-select:hover { opacity: 0.85; }
+.method-get, .method-select.method-get       { background: #dbeafe; color: #1d4ed8; }
+.method-post, .method-select.method-post     { background: #dcfce7; color: #166534; }
+.method-put, .method-select.method-put       { background: #fef9c3; color: #854d0e; }
+.method-delete, .method-select.method-delete { background: #fee2e2; color: #991b1b; }
+.method-patch, .method-select.method-patch   { background: #f3e8ff; color: #7e22ce; }
 
 /* ── Per-response schema ── */
 .resp-code-block { margin-bottom: 5px; }
