@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Swagger Preview</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; font-family: sans-serif; }
+    .swagger-ui .topbar { display: none; }
+    #loading {
+      padding: 32px 24px;
+      color: #64748b;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #loading::before {
+      content: '';
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #cbd5e1;
+      border-top-color: #0b57d0;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="loading">Загрузка Swagger UI…</div>
+  <div id="swagger-ui"></div>
+
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    var _pendingSpec = null;
+
+    function renderSpec(spec) {
+      document.getElementById('loading').style.display = 'none';
+      var el = document.getElementById('swagger-ui');
+      el.innerHTML = '';
+      SwaggerUIBundle({
+        spec: spec || {},
+        domNode: el,
+        presets: [SwaggerUIBundle.presets.apis],
+        layout: 'BaseLayout',
+        deepLinking: false,
+        defaultModelsExpandDepth: -1,
+        defaultModelExpandDepth: 2,
+      });
+    }
+
+    window.addEventListener('message', function(e) {
+      if (!e.data || e.data.type !== 'swagger-spec') return;
+      if (typeof SwaggerUIBundle !== 'undefined') {
+        renderSpec(e.data.spec);
+      } else {
+        _pendingSpec = e.data.spec;
+      }
+    });
+
+    function onLoaded() {
+      if (_pendingSpec) { renderSpec(_pendingSpec); _pendingSpec = null; }
+      window.parent.postMessage({ type: 'swagger-ready' }, '*');
+    }
+
+    if (typeof SwaggerUIBundle !== 'undefined') {
+      onLoaded();
+    } else {
+      setTimeout(function() {
+        if (typeof SwaggerUIBundle !== 'undefined') {
+          onLoaded();
+        } else {
+          document.getElementById('loading').textContent =
+            'Ошибка: не удалось загрузить Swagger UI. Проверьте подключение к интернету.';
+        }
+      }, 5000);
+    }
+  </script>
+</body>
+</html>

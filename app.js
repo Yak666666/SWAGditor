@@ -518,10 +518,44 @@ function renderOperationItem(path, method, op, availableTags, availableSchemas) 
   </li>`;
 }
 
+var _activePreviewTab  = 'json';
+var _swaggerReady      = false;
+var _swaggerTimer      = null;
+
+function refreshSwaggerUI() {
+  if (!_swaggerReady) return;
+  const p = currentProject();
+  document.getElementById('swaggerFrame')?.contentWindow?.postMessage(
+    { type: 'swagger-spec', spec: p ? JSON.parse(JSON.stringify(p.doc)) : {} }, '*'
+  );
+}
+
+window.addEventListener('message', e => {
+  if (e.data?.type === 'swagger-ready') {
+    _swaggerReady = true;
+    refreshSwaggerUI();
+  }
+});
+
+document.querySelectorAll('.preview-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    _activePreviewTab = btn.dataset.tab;
+    document.querySelectorAll('.preview-tab').forEach(b => b.classList.toggle('active', b === btn));
+    const isJson = _activePreviewTab === 'json';
+    els.jsonPreview.style.display = isJson ? 'block' : 'none';
+    document.getElementById('swaggerFrame').style.display = isJson ? 'none' : 'block';
+    if (!isJson) refreshSwaggerUI();
+  });
+});
+
 function renderPreview() {
   if (_editingPreview) return;
   const p = currentProject();
   els.jsonPreview.value = p ? JSON.stringify(p.doc, null, 2) : '';
+  if (_activePreviewTab === 'swagger') {
+    clearTimeout(_swaggerTimer);
+    _swaggerTimer = setTimeout(refreshSwaggerUI, 700);
+  }
 }
 
 function renderEditor() {
