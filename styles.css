@@ -324,11 +324,21 @@ textarea { width: 100%; min-height: 100px; }
 }
 .param-edit-desc:hover { border-bottom-color: #94a3b8; }
 .param-edit-desc:focus { border-bottom-color: #0b57d0; background: #f0f7ff; border-radius: 3px; border-bottom-style: solid; }
+.param-edit-enum {
+  font-size: 11px; color: #9d174d; background: transparent;
+  border: none; border-bottom: 1px dashed transparent;
+  padding: 0 2px; width: 90px; min-width: 60px; outline: none; cursor: text;
+  font-family: monospace;
+}
+.param-edit-enum:hover { border-bottom-color: #94a3b8; }
+.param-edit-enum:focus { border-bottom-color: #9d174d; background: #fdf2f8; border-radius: 3px; border-bottom-style: solid; }
+.param-edit-enum::placeholder { color: #e9a8c4; font-family: inherit; }
 .add-param-row { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
 .add-param-row .param-name-input { flex: 1; min-width: 80px; }
 .add-param-row .param-in-select  { min-width: 78px; }
 .add-param-row .param-type-select { min-width: 90px; }
 .add-param-row .param-desc-input { flex: 2; min-width: 100px; }
+.add-param-row .param-enum-input { flex: 1; min-width: 100px; }
 .param-req-label { display: flex; align-items: center; gap: 3px; font-size: 12px; white-space: nowrap; cursor: pointer; }
 .btn-add-param { white-space: nowrap; padding: 7px 10px; font-size: 12px; }
 

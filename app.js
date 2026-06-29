@@ -407,6 +407,9 @@ function renderOperationItem(path, method, op, availableTags, availableSchemas) 
           `<option value="${v}"${param.in===v?' selected':''}>${v}</option>`).join('');
         const paramTypeOpts2 = PARAM_TYPES.map(t =>
           `<option value="${t}"${innerType===t?' selected':''}>${t}</option>`).join('');
+        const enumValsStr = isParamArray
+          ? (pSchema.items?.enum || []).join(', ')
+          : (pSchema.enum || []).join(', ');
         return `<div class="param-row" draggable="true" data-param-idx="${idx}" data-path="${esc(path)}" data-method="${esc(method)}">
           <span class="drag-handle" title="Drag to reorder">⠿</span>
           <input class="param-edit-name" value="${esc(param.name)}" placeholder="name" data-param-idx="${idx}" data-path="${esc(path)}" data-method="${esc(method)}" />
@@ -415,6 +418,7 @@ function renderOperationItem(path, method, op, availableTags, availableSchemas) 
           <select class="param-edit-type" data-param-idx="${idx}" data-path="${esc(path)}" data-method="${esc(method)}">${paramTypeOpts2}</select>
           <label class="param-req-label" title="Array"><input type="checkbox" class="param-edit-arr" data-param-idx="${idx}" data-path="${esc(path)}" data-method="${esc(method)}"${isParamArray?' checked':''} />[ ]</label>
           <input class="param-edit-desc" value="${esc(param.description||'')}" placeholder="description…" data-param-idx="${idx}" data-path="${esc(path)}" data-method="${esc(method)}" />
+          <input class="param-edit-enum" value="${esc(enumValsStr)}" placeholder="val1, val2…" title="Available values (enum)" data-param-idx="${idx}" data-path="${esc(path)}" data-method="${esc(method)}" />
           <button class="btn-icon" data-del-param="${idx}" data-path="${esc(path)}" data-method="${esc(method)}">×</button>
         </div>`;
       }).join('')
@@ -432,6 +436,7 @@ function renderOperationItem(path, method, op, availableTags, availableSchemas) 
     <label class="param-req-label"><input type="checkbox" class="param-arr-check" />[ ]</label>
     <select class="param-type-select">${paramTypeOpts}</select>
     <input class="param-desc-input" placeholder="description" />
+    <input class="param-enum-input" placeholder="available values…" title="Comma-separated enum values (optional)" />
     <button class="btn-add-param" data-path="${esc(path)}" data-method="${esc(method)}">+ Add</button>
   </div>`;
 
@@ -874,10 +879,13 @@ els.pathsList.addEventListener('drop', e => {
 // ── Operation drag-and-drop ──
 
 let _dragOp = null;
+let _lastMouseTarget = null;
+
+els.pathsList.addEventListener('mousedown', e => { _lastMouseTarget = e.target; });
 
 els.pathsList.addEventListener('dragstart', e => {
   if (e.target.closest('.param-row')) return;
-  if (!e.target.closest('.op-drag-handle')) return;
+  if (!_lastMouseTarget?.closest('.op-drag-handle')) return;
   const item = e.target.closest('.op-item');
   if (!item) return;
   _dragOp = item.dataset.opKey;
@@ -1079,13 +1087,23 @@ els.pathsList.onclick = (e) => {
     const typeVal  = row.querySelector('.param-type-select')?.value || 'string';
     const isArr    = !!(row.querySelector('.param-arr-check')?.checked);
     const desc     = row.querySelector('.param-desc-input')?.value.trim();
-    const schema   = isArr ? { type: 'array', items: typeToSchema(typeVal) } : typeToSchema(typeVal);
+    const enumRaw  = row.querySelector('.param-enum-input')?.value.trim();
+    const enumVals = enumRaw ? enumRaw.split(',').map(v => v.trim()).filter(Boolean) : [];
+    let schema;
+    if (enumVals.length) {
+      schema = isArr
+        ? { type: 'array', items: { type: 'string', enum: enumVals } }
+        : { type: 'string', enum: enumVals };
+    } else {
+      schema = isArr ? { type: 'array', items: typeToSchema(typeVal) } : typeToSchema(typeVal);
+    }
     const param    = { name, in: inVal, required, schema };
     if (desc) param.description = desc;
     op.parameters ||= [];
-    op.parameters.unshift(param);
+    op.parameters.push(param);
     row.querySelector('.param-name-input').value = '';
     row.querySelector('.param-desc-input').value = '';
+    row.querySelector('.param-enum-input').value = '';
     persist(); renderEditor(); return;
   }
 };
@@ -1274,6 +1292,23 @@ els.pathsList.oninput = (e) => {
     const op = p.doc.paths[path]?.[method]; if (!op?.parameters?.[idx]) return;
     if (target.value) op.parameters[idx].description = target.value;
     else delete op.parameters[idx].description;
+    persist(); renderPreview(); return;
+  }
+  if (target.classList.contains('param-edit-enum')) {
+    const { path, method } = target.dataset;
+    const idx = parseInt(target.dataset.paramIdx);
+    const op = p.doc.paths[path]?.[method]; if (!op?.parameters?.[idx]) return;
+    const vals = target.value.split(',').map(v => v.trim()).filter(Boolean);
+    const isArr = op.parameters[idx].schema?.type === 'array';
+    if (vals.length) {
+      op.parameters[idx].schema = isArr
+        ? { type: 'array', items: { type: 'string', enum: vals } }
+        : { type: 'string', enum: vals };
+    } else {
+      const inner = isArr ? (op.parameters[idx].schema?.items || { type: 'string' }) : op.parameters[idx].schema;
+      const baseType = inner?.enum ? 'string' : (schemaToType(inner) || 'string');
+      op.parameters[idx].schema = isArr ? { type: 'array', items: typeToSchema(baseType) } : typeToSchema(baseType);
+    }
     persist(); renderPreview(); return;
   }
 
